@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Campus Desk</string>
+    <string name="camera_permission_rationale">Campus Desk uses the camera to scan classroom QR codes and mark your attendance.</string>
+    <string name="location_permission_rationale">Campus Desk uses your location when you scan a class QR so attendance can be confirmed on campus.</string>
+</resources>
