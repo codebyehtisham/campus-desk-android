@@ -43,8 +43,8 @@ object CampusRadius {
 }
 
 object CampusLayout {
-    const val FloatingDockHeight = 64
-    const val FloatingDockMaxWidth = 520
+    const val FloatingDockHeight = 72
+    const val FloatingDockMaxWidth = 560
     const val TabScrollBottom = 8
     const val ContentMaxWidth = 760
     const val FormMaxWidth = 480

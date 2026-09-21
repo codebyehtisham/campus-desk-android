@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.derived.campusdesk.attendance.ui
 
 import android.Manifest
@@ -16,7 +18,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,10 +35,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -66,13 +69,19 @@ import com.derived.campusdesk.attendance.AttendanceViewModel
 import com.derived.campusdesk.attendance.ScanPhase
 import com.derived.campusdesk.networking.models.AttendanceSession
 import com.derived.campusdesk.networking.models.LocationFix
+import com.derived.campusdesk.networking.models.StudentAttendanceHistory
 import com.derived.campusdesk.sharedui.components.BrandButton
 import com.derived.campusdesk.sharedui.components.BrandButtonKind
 import com.derived.campusdesk.sharedui.components.CampusCard
+import com.derived.campusdesk.sharedui.components.CampusLoadingView
+import com.derived.campusdesk.sharedui.components.EmptyStateView
 import com.derived.campusdesk.sharedui.components.ErrorBanner
 import com.derived.campusdesk.sharedui.components.Eyebrow
+import com.derived.campusdesk.sharedui.components.ScreenBackground
+import com.derived.campusdesk.sharedui.components.SectionHeader
+import com.derived.campusdesk.sharedui.components.SegmentedControl
+import com.derived.campusdesk.sharedui.components.StatusPill
 import com.derived.campusdesk.sharedui.components.ViewfinderOverlay
-import com.derived.campusdesk.sharedui.motion.CampusLiveBackdrop
 import com.derived.campusdesk.sharedui.theme.CampusLayout
 import com.derived.campusdesk.sharedui.theme.CampusTypography
 import com.derived.campusdesk.sharedui.theme.campusColors
@@ -95,7 +104,12 @@ fun AttendanceScreen(
     val successMessage by viewModel.successMessage.collectAsState()
     val session by viewModel.session.collectAsState()
     val lastFix by viewModel.lastFix.collectAsState()
+    val history by viewModel.history.collectAsState()
+    val historyLoading by viewModel.historyLoading.collectAsState()
+    val historyError by viewModel.historyError.collectAsState()
     val isSuccess = phase == ScanPhase.Success
+    var selectedSegment by remember { mutableIntStateOf(0) }
+    val isScanTab = selectedSegment == 0
 
     var cameraGranted by remember {
         mutableStateOf(
@@ -145,8 +159,18 @@ fun AttendanceScreen(
         }
     }
 
+    LaunchedEffect(selectedSegment) {
+        if (selectedSegment == 1) viewModel.loadHistory()
+    }
+
+    val title = when {
+        !isScanTab -> "Your record"
+        isSuccess -> "Checked in"
+        else -> "Check in"
+    }
+
     Box(modifier.fillMaxSize()) {
-        CampusLiveBackdrop()
+        ScreenBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -159,52 +183,165 @@ fun AttendanceScreen(
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Eyebrow(if (isSuccess) "Attendance" else "Lecture hall")
-                Text(
-                    if (isSuccess) "Checked in" else "Check in",
-                    style = CampusTypography.Display,
-                    color = colors.ink,
-                )
-                if (!isSuccess) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Eyebrow("Attendance")
+                Text(title, style = CampusTypography.Display, color = colors.ink)
+                if (isScanTab && !isSuccess) {
                     Text(
-                        if (attendanceLocationEnabled) {
-                            "Hold the classroom QR inside the frame. Location is captured only when you scan."
-                        } else {
-                            "Hold the classroom QR inside the frame. No GPS is required for this campus."
-                        },
+                        "Scan the QR code displayed in class to mark your attendance.",
                         style = CampusTypography.Callout,
                         color = colors.muted,
                     )
                 }
             }
 
-            AnimatedContent(
-                targetState = isSuccess,
-                transitionSpec = {
-                    (fadeIn() + scaleIn(initialScale = 0.96f)) togetherWith (fadeOut() + scaleOut(targetScale = 0.96f))
-                },
-                label = "attendancePhase",
-            ) { success ->
-                if (success) {
-                    SuccessCard(
-                        message = successMessage ?: "You are marked present.",
-                        session = session,
-                        lastFix = lastFix,
-                        onScanAnother = viewModel::reset,
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        ScannerStage(
-                            cameraGranted = cameraGranted,
-                            isLoading = isLoading,
-                            locationEnabled = attendanceLocationEnabled,
-                            onCode = viewModel::handleScan,
-                        )
-                        errorMessage?.let { ErrorBanner(it) }
+            SegmentedControl(
+                options = listOf("Scan", "History"),
+                selectedIndex = selectedSegment,
+                onSelect = { selectedSegment = it },
+            )
+
+            when (selectedSegment) {
+                0 -> ScanSection(
+                    isSuccess = isSuccess,
+                    cameraGranted = cameraGranted,
+                    isLoading = isLoading,
+                    errorMessage = errorMessage,
+                    successMessage = successMessage,
+                    session = session,
+                    lastFix = lastFix,
+                    locationEnabled = attendanceLocationEnabled,
+                    onCode = viewModel::handleScan,
+                    onScanAnother = viewModel::reset,
+                )
+                else -> HistorySection(
+                    history = history,
+                    isLoading = historyLoading,
+                    errorMessage = historyError,
+                    onRetry = viewModel::loadHistory,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanSection(
+    isSuccess: Boolean,
+    cameraGranted: Boolean,
+    isLoading: Boolean,
+    errorMessage: String?,
+    successMessage: String?,
+    session: AttendanceSession?,
+    lastFix: LocationFix?,
+    locationEnabled: Boolean,
+    onCode: (String) -> Unit,
+    onScanAnother: () -> Unit,
+) {
+    AnimatedContent(
+        targetState = isSuccess,
+        transitionSpec = {
+            (fadeIn() + scaleIn(initialScale = 0.96f)) togetherWith (fadeOut() + scaleOut(targetScale = 0.96f))
+        },
+        label = "attendancePhase",
+    ) { success ->
+        if (success) {
+            SuccessCard(
+                message = successMessage ?: "You are marked present.",
+                session = session,
+                lastFix = lastFix,
+                onScanAnother = onScanAnother,
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                ScannerStage(
+                    cameraGranted = cameraGranted,
+                    isLoading = isLoading,
+                    locationEnabled = locationEnabled,
+                    onCode = onCode,
+                )
+                errorMessage?.let { ErrorBanner(it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistorySection(
+    history: StudentAttendanceHistory?,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
+) {
+    when {
+        isLoading && history == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+            CampusLoadingView()
+        }
+        errorMessage != null && history == null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ErrorBanner(errorMessage)
+            BrandButton(text = "Try again", onClick = onRetry, kind = BrandButtonKind.Secondary)
+        }
+        history == null || (history.dailyRecords.isEmpty() && history.sessions.isNullOrEmpty()) -> {
+            EmptyStateView(
+                title = "No attendance yet",
+                message = "Your check-ins and daily register will appear here.",
+                icon = Icons.Default.CalendarMonth,
+            )
+        }
+        else -> Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            if (history.dailyRecords.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionHeader("Daily register", subtitle = "Your attendance log")
+                    history.dailyRecords.forEach { day ->
+                        CampusCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        day.className?.takeIf { it.isNotBlank() } ?: "Campus",
+                                        style = CampusTypography.Headline,
+                                        color = campusColors().ink,
+                                    )
+                                    Text(
+                                        day.dateLabel ?: day.date ?: "—",
+                                        style = CampusTypography.Caption,
+                                        color = campusColors().muted,
+                                    )
+                                }
+                                StatusPill(day.status ?: "pending")
+                            }
+                        }
+                    }
+                }
+            }
+            history.sessions.orEmpty().takeIf { it.isNotEmpty() }?.let { sessions ->
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionHeader("Session attendance", subtitle = "QR check-ins")
+                    sessions.forEach { item ->
+                        CampusCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        item.className ?: "Session",
+                                        style = CampusTypography.Headline,
+                                        color = campusColors().ink,
+                                    )
+                                    Text(
+                                        item.dateLabel ?: item.date ?: "—",
+                                        style = CampusTypography.Caption,
+                                        color = campusColors().muted,
+                                    )
+                                }
+                                StatusPill(item.status ?: "pending")
+                            }
+                        }
                     }
                 }
             }
@@ -225,14 +362,14 @@ private fun ScannerStage(
         modifier = Modifier
             .fillMaxWidth()
             .height(340.dp)
-            .shadow(24.dp, shape, ambientColor = colors.brandRed.copy(alpha = 0.22f), spotColor = colors.brandRed.copy(alpha = 0.22f))
+            .shadow(
+                24.dp,
+                shape,
+                ambientColor = colors.brandRed.copy(alpha = 0.22f),
+                spotColor = colors.brandRed.copy(alpha = 0.22f),
+            )
             .clip(shape)
-            .background(Color.Black.copy(alpha = 0.82f))
-            .border(
-                width = 2.dp,
-                brush = Brush.linearGradient(listOf(colors.brandRed, colors.brandBlue)),
-                shape = shape,
-            ),
+            .background(Color.Black.copy(alpha = 0.82f)),
         contentAlignment = Alignment.Center,
     ) {
         if (cameraGranted) {
@@ -244,7 +381,12 @@ private fun ScannerStage(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.padding(horizontal = 28.dp),
             ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = colors.onBrand.copy(alpha = 0.9f), modifier = Modifier.size(42.dp))
+                Icon(
+                    Icons.Default.CameraAlt,
+                    contentDescription = null,
+                    tint = colors.onBrand.copy(alpha = 0.9f),
+                    modifier = Modifier.size(42.dp),
+                )
                 Text(
                     "Allow camera access in Settings to scan the classroom QR code.",
                     style = CampusTypography.Callout,

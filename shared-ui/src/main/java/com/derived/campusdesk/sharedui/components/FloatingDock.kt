@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,10 +22,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Icon
@@ -35,9 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,12 +44,9 @@ import com.derived.campusdesk.sharedui.theme.CampusLayout
 import com.derived.campusdesk.sharedui.theme.CampusTypography
 import com.derived.campusdesk.sharedui.theme.campusColors
 
-enum class AppTab { Home, Courses, Scan, Profile }
+enum class AppTab { Home, Classes, Assignments, Attendance, Profile }
 
 private val DockPillHeight = CampusLayout.FloatingDockHeight.dp
-private val ScanButtonSize = 40.dp
-/** How far the Scan circle sits above the pill — kept inside layout bounds (no negative offset). */
-private val ScanRaise = 14.dp
 
 @Composable
 fun FloatingDock(
@@ -60,57 +56,49 @@ fun FloatingDock(
 ) {
     val colors = campusColors()
     val pill = campusPillShape()
-    val totalHeight = DockPillHeight + ScanRaise
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = CampusLayout.FloatingDockMaxWidth.dp)
-                .height(totalHeight),
+                .height(DockPillHeight)
+                .shadow(
+                    14.dp,
+                    pill,
+                    ambientColor = colors.ink.copy(alpha = 0.12f),
+                    spotColor = colors.ink.copy(alpha = 0.12f),
+                    clip = false,
+                )
+                .background(colors.surface.copy(alpha = 0.96f), pill)
+                .border(1.dp, colors.stroke.copy(alpha = 0.7f), pill),
         ) {
-            // White pill — bottom-aligned; Scan circle lives in the space above it.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(DockPillHeight)
-                    .shadow(
-                        14.dp,
-                        pill,
-                        ambientColor = colors.ink.copy(alpha = 0.12f),
-                        spotColor = colors.ink.copy(alpha = 0.12f),
-                        clip = false,
-                    )
-                    .background(colors.surface.copy(alpha = 0.96f), pill)
-                    .border(1.dp, colors.stroke.copy(alpha = 0.7f), pill),
-            )
-
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                DockRegularItem(AppTab.Home, "Home", Icons.Default.Home, selected, onSelect, Modifier.weight(1f))
-                DockRegularItem(AppTab.Courses, "Courses", Icons.Default.Book, selected, onSelect, Modifier.weight(1f))
-                DockScanItem(selected, onSelect, Modifier.weight(1f))
-                DockRegularItem(AppTab.Profile, "You", Icons.Default.Person, selected, onSelect, Modifier.weight(1f))
+                DockItem(AppTab.Home, "Home", Icons.Default.Home, selected, onSelect, Modifier.weight(1f))
+                DockItem(AppTab.Classes, "Classes", Icons.Default.MenuBook, selected, onSelect, Modifier.weight(1f))
+                DockItem(AppTab.Assignments, "Assignments", Icons.Default.Assignment, selected, onSelect, Modifier.weight(1f))
+                DockItem(AppTab.Attendance, "Attendance", Icons.Default.QrCodeScanner, selected, onSelect, Modifier.weight(1f))
+                DockItem(AppTab.Profile, "You", Icons.Default.Person, selected, onSelect, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun DockRegularItem(
+private fun DockItem(
     tab: AppTab,
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     selected: AppTab,
     onSelect: (AppTab) -> Unit,
     modifier: Modifier = Modifier,
@@ -125,67 +113,18 @@ private fun DockRegularItem(
             .height(DockPillHeight)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable { onSelect(tab) }
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
-        Text(label, color = tint, textAlign = TextAlign.Center, style = CampusTypography.Caption.copy(fontSize = 9.sp))
-    }
-}
-
-@Composable
-private fun DockScanItem(
-    selected: AppTab,
-    onSelect: (AppTab) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = campusColors()
-    val isSelected = selected == AppTab.Scan
-    val scale by animateFloatAsState(if (isSelected) 1f else 0.96f, spring(dampingRatio = 0.84f), label = "scanScale")
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable { onSelect(AppTab.Scan) },
-    ) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 0.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(ScanButtonSize)
-                    .shadow(
-                        8.dp,
-                        CircleShape,
-                        ambientColor = colors.brandRed.copy(alpha = 0.32f),
-                        spotColor = colors.brandRed.copy(alpha = 0.32f),
-                        clip = false,
-                    )
-                    .clip(CircleShape)
-                    .background(campusHeroGradient(colors)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.QrCodeScanner,
-                    contentDescription = "Scan",
-                    tint = colors.onBrand,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Text(
-                "Scan",
-                color = if (isSelected) colors.brandRed else colors.muted,
-                textAlign = TextAlign.Center,
-                style = CampusTypography.Caption.copy(fontSize = 9.sp),
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
+        Text(
+            label,
+            color = tint,
+            textAlign = TextAlign.Center,
+            style = CampusTypography.Caption.copy(fontSize = 8.sp),
+            maxLines = 1,
+        )
     }
 }
 

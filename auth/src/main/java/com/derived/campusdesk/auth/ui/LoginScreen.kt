@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,11 +17,15 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -36,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -43,7 +49,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-
+import androidx.compose.ui.unit.sp
 import com.derived.campusdesk.auth.ForgotPasswordViewModel
 import com.derived.campusdesk.auth.LoginViewModel
 import com.derived.campusdesk.networking.api.ApiEnvironmentPreset
@@ -53,8 +59,11 @@ import com.derived.campusdesk.networking.debug.DevToolsConfig
 import com.derived.campusdesk.sharedui.components.BrandButton
 import com.derived.campusdesk.sharedui.components.BrandMark
 import com.derived.campusdesk.sharedui.components.BrandTextField
+import com.derived.campusdesk.sharedui.components.CampusLoadingView
+import com.derived.campusdesk.sharedui.components.DerivedLoaderStyle
 import com.derived.campusdesk.sharedui.components.ErrorBanner
 import com.derived.campusdesk.sharedui.components.Eyebrow
+import com.derived.campusdesk.sharedui.components.campusPillShape
 import com.derived.campusdesk.sharedui.motion.CampusLiveBackdrop
 import com.derived.campusdesk.sharedui.motion.FloatingParticles
 import com.derived.campusdesk.sharedui.motion.ShakeEffect
@@ -64,6 +73,7 @@ import com.derived.campusdesk.sharedui.theme.CampusSpacing
 import com.derived.campusdesk.sharedui.theme.CampusTypography
 import com.derived.campusdesk.sharedui.theme.campusColors
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -83,11 +93,21 @@ fun LoginScreen(
     var errorShake by remember { mutableIntStateOf(0) }
     if (errorMessage != null) errorShake++
 
+    var taglineStep by remember { mutableIntStateOf(1) } // Courses highlighted like screenshot
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2200)
+            taglineStep = (taglineStep + 1) % 3
+        }
+    }
+
     val density = LocalDensity.current
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val colors = campusColors()
+    val taglines = listOf("Attendance", "Courses", "News")
 
     Box(Modifier.fillMaxSize()) {
         CampusLiveBackdrop(intense = true)
@@ -105,18 +125,12 @@ fun LoginScreen(
                         keyboardController?.hide()
                     })
                 },
-            // When the keyboard is open, pack content to the top so fields can scroll above it.
             verticalArrangement = if (imeVisible) Arrangement.Top else Arrangement.SpaceBetween,
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(
-                        top = if (imeVisible) 12.dp else 48.dp,
-                        start = 24.dp,
-                        end = 24.dp,
-                        bottom = if (imeVisible) 8.dp else 16.dp,
-                    )
+                    .padding(horizontal = 24.dp, vertical = if (imeVisible) 12.dp else 18.dp)
                     .then(
                         if (devToolsConfig.isDevToolsEnabled) {
                             Modifier.clickable { showEnvironmentPicker = true }
@@ -124,28 +138,23 @@ fun LoginScreen(
                             Modifier
                         },
                     ),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                BrandMark(size = if (imeVisible) 40 else 64)
-                if (!imeVisible) {
-                    Spacer(Modifier.height(CampusSpacing.Md.dp))
-                    Text(
-                        "Campus Desk",
-                        style = CampusTypography.Display,
-                        color = campusColors().ink,
-                    )
-                    Text(
-                        "Attendance · Courses · News",
-                        color = campusColors().muted,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    )
-                    if (devToolsConfig.isDevToolsEnabled) {
-                        Spacer(Modifier.height(CampusSpacing.Xs.dp))
-                        Text(
-                            "Tap header to switch API environment",
-                            color = campusColors().brandBlue,
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                        )
+                BrandMark(size = if (imeVisible) 40 else 48)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Campus Desk", style = CampusTypography.Title.copy(fontSize = 22.sp), color = colors.ink)
+                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        taglines.forEachIndexed { index, item ->
+                            Text(
+                                item,
+                                style = CampusTypography.Caption,
+                                color = if (taglineStep == index) colors.brandRed else colors.muted,
+                            )
+                            if (index < taglines.lastIndex) {
+                                Text(" · ", style = CampusTypography.Caption, color = colors.stroke)
+                            }
+                        }
                     }
                 }
             }
@@ -162,9 +171,10 @@ fun LoginScreen(
                 onForgot = { showForgot = true },
                 canSubmit = loginViewModel.canSubmit,
             )
+        }
 
-            // Extra room so BringIntoView can scroll the focused field fully above the IME.
-            Spacer(Modifier.height(if (imeVisible) 24.dp else 8.dp))
+        if (isLoading) {
+            CampusLoadingView(style = DerivedLoaderStyle.Overlay)
         }
     }
 
@@ -201,38 +211,63 @@ private fun LoginSheet(
     canSubmit: Boolean,
 ) {
     val colors = campusColors()
+    val sheetShape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp))
-            .background(colors.surface.copy(alpha = 0.94f))
-            .border(
-                width = 1.dp,
-                brush = Brush.horizontalGradient(listOf(colors.brandBlue, colors.brandRed, colors.brandBlue)),
-                shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-            )
-            .padding(CampusSpacing.Lg.dp),
-        contentAlignment = Alignment.Center,
+            .shadow(30.dp, sheetShape, ambientColor = colors.ink.copy(alpha = 0.12f), spotColor = colors.ink.copy(alpha = 0.12f))
+            .clip(sheetShape)
+            .background(colors.surface)
+            .border(1.dp, colors.stroke.copy(alpha = 0.85f), sheetShape)
+            .padding(bottom = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 12.dp, bottom = 8.dp)
+                .size(width = 42.dp, height = 5.dp)
+                .clip(campusPillShape())
+                .background(colors.stroke.copy(alpha = 0.85f)),
+        )
         Column(
-            modifier = Modifier.widthIn(max = CampusLayout.FormMaxWidth.dp),
-            verticalArrangement = Arrangement.spacedBy(CampusSpacing.Md.dp),
+            modifier = Modifier
+                .widthIn(max = CampusLayout.FormMaxWidth.dp)
+                .padding(horizontal = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Eyebrow("Student Portal")
-            Text("Welcome back", style = CampusTypography.Title, color = colors.ink)
-            Text(
-                "Sign in with your campus email to access courses, news, and attendance.",
-                color = colors.muted,
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Eyebrow("Student portal")
+                Text("Welcome back", style = CampusTypography.Title, color = colors.ink)
+                Text(
+                    "Sign in with your campus email to mark attendance and open your courses.",
+                    color = colors.muted,
+                    style = CampusTypography.Callout,
+                )
+            }
+            BrandTextField(
+                value = email,
+                onValueChange = onEmailChange,
+                label = "Campus email",
+                placeholder = "Campus email",
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
+                leadingIcon = Icons.Default.Email,
             )
-            BrandTextField(email, onEmailChange, "Email", keyboardType = androidx.compose.ui.text.input.KeyboardType.Email)
-            BrandTextField(password, onPasswordChange, "Password", isPassword = true)
+            BrandTextField(
+                value = password,
+                onValueChange = onPasswordChange,
+                label = "Password",
+                placeholder = "Password",
+                isPassword = true,
+                leadingIcon = Icons.Default.Lock,
+            )
             Text(
                 "Forgot password?",
                 color = colors.brandBlue,
-                modifier = Modifier.clickable(onClick = onForgot),
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                style = CampusTypography.Callout,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable(onClick = onForgot),
             )
             ShakeEffect(errorShake) {
                 if (errorMessage != null) ErrorBanner(errorMessage)
@@ -240,8 +275,15 @@ private fun LoginSheet(
             BrandButton(
                 text = "Continue",
                 onClick = onSubmit,
-                enabled = canSubmit,
-                loading = isLoading,
+                enabled = canSubmit && !isLoading,
+                loading = false,
+            )
+            Text(
+                "Accounts are issued by your college. Password resets go to your campus inbox.",
+                color = colors.muted,
+                style = CampusTypography.Caption,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -284,7 +326,15 @@ fun ForgotPasswordScreen(viewModel: ForgotPasswordViewModel, onBack: () -> Unit)
                 )
             } else {
                 Text("Reset password", style = CampusTypography.Title, color = colors.ink)
-                BrandTextField(email, viewModel::onEmailChange, "Email", keyboardType = androidx.compose.ui.text.input.KeyboardType.Email)
+                Spacer(Modifier.height(12.dp))
+                BrandTextField(
+                    email,
+                    viewModel::onEmailChange,
+                    "Campus email",
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
+                    leadingIcon = Icons.Default.Email,
+                )
+                Spacer(Modifier.height(12.dp))
                 BrandButton(text = "Send reset link", onClick = viewModel::submit, loading = isLoading)
             }
             Spacer(Modifier.height(CampusSpacing.Md.dp))

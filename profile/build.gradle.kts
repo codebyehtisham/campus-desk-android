@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":networking"))
     implementation(project(":shared-ui"))
     implementation(project(":auth"))
+    implementation(project(":archer-sdk"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.ui)
@@ -41,4 +42,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 }

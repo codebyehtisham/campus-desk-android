@@ -11,14 +11,18 @@ import com.derived.campusdesk.networking.api.ApiEnvironmentPreset
 import com.derived.campusdesk.networking.api.ApiEnvironmentStore
 import com.derived.campusdesk.networking.api.CampusDeskApi
 import com.derived.campusdesk.networking.client.NetworkClientFactory
+import com.derived.campusdesk.networking.analytics.ArcherApiInterceptor
 import com.derived.campusdesk.networking.debug.DevToolsConfig
 import com.derived.campusdesk.networking.debug.NetworkResponseLogger
+import com.derived.campusdesk.networking.security.PasswordEncryptor
 import com.derived.campusdesk.networking.services.AttendanceService
 import com.derived.campusdesk.networking.services.AttendanceServiceImpl
 import com.derived.campusdesk.networking.services.AuthService
 import com.derived.campusdesk.networking.services.AuthServiceImpl
 import com.derived.campusdesk.networking.services.CampusService
 import com.derived.campusdesk.networking.services.CampusServiceImpl
+import com.derived.campusdesk.networking.services.StudentService
+import com.derived.campusdesk.networking.services.StudentServiceImpl
 import com.derived.campusdesk.networking.storage.SecureTokenStore
 import com.derived.campusdesk.networking.storage.TokenStore
 import dagger.Module
@@ -60,7 +64,12 @@ object AppModule {
         devToolsConfig: DevToolsConfig,
     ): NetworkClientFactory {
         val logger = if (devToolsConfig.isDevToolsEnabled) NetworkResponseLogger(devToolsConfig) else null
-        return NetworkClientFactory(apiConfigProvider, tokenStore, logger)
+        return NetworkClientFactory(
+            apiConfigProvider = apiConfigProvider,
+            tokenStore = tokenStore,
+            debugInterceptor = logger,
+            analyticsInterceptor = ArcherApiInterceptor(),
+        )
     }
 
     @Provides
@@ -69,25 +78,39 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun providePasswordEncryptor(factory: NetworkClientFactory): PasswordEncryptor =
+        PasswordEncryptor({ factory.createApi() })
+
+    @Provides
+    @Singleton
     fun provideAuthService(
         factory: NetworkClientFactory,
         apiConfigProvider: ApiConfigProvider,
-        apiProvider: CampusDeskApi,
-    ): AuthService = AuthServiceImpl({ factory.createApi() }, factory.campusJson, apiConfigProvider)
+        encryptor: PasswordEncryptor,
+    ): AuthService = AuthServiceImpl(
+        { factory.createApi() },
+        factory.campusJson,
+        apiConfigProvider,
+        encryptor,
+    )
 
     @Provides
     @Singleton
     fun provideCampusService(
         factory: NetworkClientFactory,
-        apiProvider: CampusDeskApi,
     ): CampusService = CampusServiceImpl({ factory.createApi() }, factory.campusJson)
 
     @Provides
     @Singleton
     fun provideAttendanceService(
         factory: NetworkClientFactory,
-        apiProvider: CampusDeskApi,
     ): AttendanceService = AttendanceServiceImpl({ factory.createApi() }, factory.campusJson)
+
+    @Provides
+    @Singleton
+    fun provideStudentService(
+        factory: NetworkClientFactory,
+    ): StudentService = StudentServiceImpl({ factory.createApi() }, factory.campusJson)
 
     @Provides
     @Singleton

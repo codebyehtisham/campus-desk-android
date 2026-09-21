@@ -49,6 +49,8 @@ object FlexibleIdSerializer : KSerializer<FlexibleId> {
 object PayloadDecoder {
     private val arrayKeys = listOf(
         "items", "data", "results", "rows", "courses", "news", "faculty", "people",
+        "classes", "assignments", "notifications", "quizzes", "exams", "leaves",
+        "slots", "sessions", "daily", "register", "openSessions", "recentQuizMarks",
     )
 
     fun decodeArray(root: JsonElement): JsonArray? {

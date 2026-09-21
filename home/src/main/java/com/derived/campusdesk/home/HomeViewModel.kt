@@ -2,11 +2,10 @@ package com.derived.campusdesk.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.derived.campusdesk.networking.api.ApiConfigProvider
-import com.derived.campusdesk.networking.models.CampusSettings
-import com.derived.campusdesk.networking.models.FacultyMember
-import com.derived.campusdesk.networking.models.NewsItem
-import com.derived.campusdesk.networking.services.CampusService
+import com.derived.campusdesk.networking.client.NetworkError
+import com.derived.campusdesk.networking.models.StudentDashboard
+import com.derived.campusdesk.networking.models.StudentNotification
+import com.derived.campusdesk.networking.services.StudentService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -17,18 +16,13 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val campusService: CampusService,
-    private val apiConfigProvider: ApiConfigProvider,
+    private val studentService: StudentService,
 ) : ViewModel() {
-    private val instituteSlug get() = apiConfigProvider.defaultInstituteSlug()
-    private val _settings = MutableStateFlow<CampusSettings?>(null)
-    val settings: StateFlow<CampusSettings?> = _settings.asStateFlow()
+    private val _dashboard = MutableStateFlow<StudentDashboard?>(null)
+    val dashboard: StateFlow<StudentDashboard?> = _dashboard.asStateFlow()
 
-    private val _news = MutableStateFlow<List<NewsItem>>(emptyList())
-    val news: StateFlow<List<NewsItem>> = _news.asStateFlow()
-
-    private val _faculty = MutableStateFlow<List<FacultyMember>>(emptyList())
-    val faculty: StateFlow<List<FacultyMember>> = _faculty.asStateFlow()
+    private val _notifications = MutableStateFlow<List<StudentNotification>>(emptyList())
+    val notifications: StateFlow<List<StudentNotification>> = _notifications.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -36,27 +30,49 @@ class HomeViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _isNotEnrolled = MutableStateFlow(false)
+    val isNotEnrolled: StateFlow<Boolean> = _isNotEnrolled.asStateFlow()
+
+    val unreadCount: Int
+        get() = _notifications.value.count { it.read != true }
+
     fun load() {
         viewModelScope.launch {
-            _isLoading.value = true
+            val firstLoad = _dashboard.value == null
+            _isLoading.value = firstLoad
             _errorMessage.value = null
+            _isNotEnrolled.value = false
             try {
-                val settingsDeferred = async { runCatching { campusService.settings(instituteSlug) }.getOrNull() }
-                val newsDeferred = async { runCatching { campusService.news() }.getOrNull().orEmpty() }
-                val facultyDeferred = async { runCatching { campusService.faculty() }.getOrNull().orEmpty() }
-                val nextSettings = settingsDeferred.await()
-                val nextNews = newsDeferred.await()
-                val nextFaculty = facultyDeferred.await()
-                // Assign together so the UI stays on the branded loader until everything is ready.
-                _settings.value = nextSettings ?: _settings.value
-                _news.value = nextNews
-                _faculty.value = nextFaculty
-                if (_settings.value == null && _news.value.isEmpty() && _faculty.value.isEmpty()) {
-                    _errorMessage.value = "Could not load campus data."
+                val dashboardDeferred = async { runCatching { studentService.dashboard() } }
+                val notificationsDeferred = async { runCatching { studentService.notifications() } }
+                val dashboardResult = dashboardDeferred.await()
+                val notificationsResult = notificationsDeferred.await()
+
+                dashboardResult.onSuccess { _dashboard.value = it }
+                notificationsResult.onSuccess { _notifications.value = it }
+
+                if (_dashboard.value == null) {
+                    val failure = dashboardResult.exceptionOrNull()
+                        ?: notificationsResult.exceptionOrNull()
+                    handleError(failure)
                 }
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    private fun handleError(error: Throwable?) {
+        when {
+            error is NetworkError && error.isNotEnrolled -> {
+                _isNotEnrolled.value = true
+                _errorMessage.value = null
+            }
+            error?.message?.contains("enroll", ignoreCase = true) == true -> {
+                _isNotEnrolled.value = true
+                _errorMessage.value = null
+            }
+            else -> _errorMessage.value = error?.message ?: "Could not load dashboard."
         }
     }
 }

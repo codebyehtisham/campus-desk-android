@@ -43,6 +43,7 @@ data class AuthCredentials(
     val email: String,
     val password: String,
     val institute: String = "explore",
+    val client: String = "mobile",
 )
 
 @Serializable

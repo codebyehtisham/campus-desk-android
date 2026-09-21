@@ -15,6 +15,7 @@ class NetworkClientFactory(
     private val apiConfigProvider: ApiConfigProvider,
     private val tokenStore: TokenStore,
     private val debugInterceptor: Interceptor? = null,
+    private val analyticsInterceptor: Interceptor? = null,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -32,27 +33,26 @@ class NetworkClientFactory(
             .writeTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val original = chain.request()
+                val path = original.url.encodedPath
                 val builder = original.newBuilder()
                     .header("Accept", "application/json")
                 if (original.body != null) {
                     builder.header("Content-Type", "application/json")
                 }
                 tokenStore.token()?.takeIf { it.isNotBlank() }?.let { token ->
-                    if (!original.url.encodedPath.contains("/auth/login") &&
-                        !original.url.encodedPath.contains("/auth/register") &&
-                        !original.url.encodedPath.contains("/auth/forgot-password") &&
-                        !original.url.encodedPath.contains("/api/health") &&
-                        !original.url.encodedPath.contains("/api/settings") &&
-                        !original.url.encodedPath.contains("/api/news") &&
-                        !original.url.encodedPath.contains("/api/faculty") &&
-                        !original.url.encodedPath.contains("/api/courses")
-                    ) {
+                    if (!isPublicAuthPath(path)) {
                         builder.header("Authorization", "Bearer $token")
                     }
                 }
-                chain.proceed(builder.build())
+                val response = chain.proceed(builder.build())
+                if (response.code == 401 && !isLoginStylePath(path)) {
+                    tokenStore.clear()
+                    SessionEvents.notifyUnauthorized()
+                }
+                response
             }
 
+        analyticsInterceptor?.let { clientBuilder.addInterceptor(it) }
         debugInterceptor?.let { clientBuilder.addInterceptor(it) }
 
         val retrofit = Retrofit.Builder()
@@ -68,4 +68,21 @@ class NetworkClientFactory(
 
     private fun ensureTrailingSlash(url: String): String =
         if (url.endsWith("/")) url else "$url/"
+
+    private fun isPublicAuthPath(path: String): Boolean =
+        path.contains("/auth/login") ||
+            path.contains("/auth/register") ||
+            path.contains("/auth/forgot-password") ||
+            path.contains("/auth/password-key") ||
+            path.contains("/api/health") ||
+            path.contains("/api/settings") ||
+            path.contains("/api/news") ||
+            path.contains("/api/faculty") ||
+            path.contains("/api/courses")
+
+    private fun isLoginStylePath(path: String): Boolean =
+        path.contains("/auth/login") ||
+            path.contains("/auth/register") ||
+            path.contains("/auth/forgot-password") ||
+            path.contains("/auth/password-key")
 }

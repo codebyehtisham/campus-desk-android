@@ -1,22 +1,29 @@
 package com.derived.campusdesk.auth
 
 import com.derived.campusdesk.networking.client.NetworkError
+import com.derived.campusdesk.networking.client.SessionEvents
+import com.derived.campusdesk.networking.analytics.ArcherAnalytics
 import com.derived.campusdesk.networking.models.AuthResponse
 import com.derived.campusdesk.networking.models.CampusLocation
 import com.derived.campusdesk.networking.models.Organization
 import com.derived.campusdesk.networking.models.User
 import com.derived.campusdesk.networking.services.AuthService
-import com.derived.campusdesk.networking.storage.PersistedSession
 import com.derived.campusdesk.networking.storage.TokenStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 class SessionStore(
     private val authService: AuthService,
     private val tokenStore: TokenStore,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private val _phase = MutableStateFlow<SessionPhase>(
         if (tokenStore.token() == null) SessionPhase.SignedOut else SessionPhase.Launching,
     )
@@ -24,21 +31,24 @@ class SessionStore(
 
     val isAuthenticated: Boolean get() = _phase.value is SessionPhase.SignedIn
 
+    init {
+        scope.launch {
+            SessionEvents.unauthorized.collect {
+                if (_phase.value is SessionPhase.SignedIn) {
+                    logout()
+                }
+            }
+        }
+    }
+
     /**
-     * Cold start: prefer the locally persisted user snapshot.
-     * Skips `/me` when a cached session exists so the dashboard opens offline-fast.
-     * Only hits the network when a token exists without a local snapshot (upgrade path).
+     * Cold start: always verify with `/api/auth/me` when a token exists.
+     * Never navigate from cached user data alone (iOS parity).
      */
     suspend fun restore() {
         if (tokenStore.token().isNullOrBlank()) {
             tokenStore.clear()
             _phase.value = SessionPhase.SignedOut
-            return
-        }
-
-        val cached = tokenStore.loadSession()
-        if (cached != null) {
-            enterSignedIn(cached, persist = false)
             return
         }
 
@@ -76,6 +86,7 @@ class SessionStore(
     }
 
     fun logout() {
+        ArcherAnalytics.clearUser()
         tokenStore.clear()
         _phase.value = SessionPhase.SignedOut
     }
@@ -110,16 +121,6 @@ class SessionStore(
         )
     }
 
-    private fun enterSignedIn(session: PersistedSession, persist: Boolean = true) {
-        enterSignedIn(
-            user = session.user,
-            organization = session.organization,
-            attendanceLocationEnabled = session.attendanceLocationEnabled,
-            campusLocation = session.campusLocation,
-            persist = persist,
-        )
-    }
-
     private fun enterSignedIn(
         user: User,
         organization: Organization?,
@@ -140,6 +141,12 @@ class SessionStore(
             organization = organization,
             attendanceLocationEnabled = attendanceLocationEnabled,
             campusFence = campusLocation?.toFence(),
+        )
+        ArcherAnalytics.identify(
+            userId = user.id.value,
+            email = user.email,
+            role = user.role,
+            organization = organization?.name ?: organization?.slug,
         )
     }
 }

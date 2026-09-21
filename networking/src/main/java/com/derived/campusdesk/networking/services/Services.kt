@@ -2,7 +2,6 @@ package com.derived.campusdesk.networking.services
 
 import com.derived.campusdesk.networking.api.ApiConfigProvider
 import com.derived.campusdesk.networking.api.CampusDeskApi
-import com.derived.campusdesk.networking.client.NetworkClientFactory
 import com.derived.campusdesk.networking.client.NetworkError
 import com.derived.campusdesk.networking.models.AttendanceMarkResult
 import com.derived.campusdesk.networking.models.AttendanceScanPayload
@@ -19,6 +18,7 @@ import com.derived.campusdesk.networking.models.NewsItem
 import com.derived.campusdesk.networking.models.PayloadDecoder
 import com.derived.campusdesk.networking.models.RegisterPayload
 import com.derived.campusdesk.networking.models.StudentApplication
+import com.derived.campusdesk.networking.security.PasswordEncryptor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -50,14 +50,21 @@ class AuthServiceImpl(
     private val apiProvider: () -> CampusDeskApi,
     private val json: Json,
     private val apiConfigProvider: ApiConfigProvider,
+    private val encryptor: PasswordEncryptor,
 ) : AuthService {
     override suspend fun login(email: String, password: String): AuthResponse {
         val institute = apiConfigProvider.defaultInstituteSlug()
-        return execute { apiProvider().login(AuthCredentials(email, password, institute)) }
+        return sendAuth {
+            val secured = encryptor.securePassword(password)
+            execute { apiProvider().login(AuthCredentials(email, secured, institute)) }
+        }
     }
 
     override suspend fun register(name: String, email: String, password: String): AuthResponse =
-        execute { apiProvider().register(RegisterPayload(name, email, password)) }
+        sendAuth {
+            val secured = encryptor.securePassword(password)
+            execute { apiProvider().register(RegisterPayload(name, email, secured)) }
+        }
 
     override suspend fun me(): MeResponse = execute {
         val root = apiProvider().me()
@@ -69,6 +76,19 @@ class AuthServiceImpl(
             apiProvider().forgotPassword(ForgotPasswordPayload(email))
         } catch (_: Exception) {
             // Always succeed to prevent email enumeration
+        }
+    }
+
+    private suspend fun <T> sendAuth(operation: suspend () -> T): T {
+        return try {
+            operation()
+        } catch (e: NetworkError.Client) {
+            if (e.status == 400 && e.message.contains("decrypt", ignoreCase = true)) {
+                encryptor.invalidateCache()
+                operation()
+            } else {
+                throw e
+            }
         }
     }
 }
@@ -140,7 +160,7 @@ class AttendanceServiceImpl(
     }
 }
 
-private inline fun <T> execute(block: () -> T): T = try {
+internal inline fun <T> execute(block: () -> T): T = try {
     block()
 } catch (e: HttpException) {
     throw mapHttpException(e)
@@ -156,10 +176,13 @@ private inline fun <T> execute(block: () -> T): T = try {
     throw NetworkError.Transport(e.message ?: "Network request failed.")
 }
 
-private fun mapHttpException(e: HttpException): NetworkError {
+internal fun mapHttpException(e: HttpException): NetworkError {
     val status = e.code()
     val body = e.response()?.errorBody()?.string().orEmpty()
     val message = parseErrorMessage(body, status)
+    if (message.contains("enroll", ignoreCase = true)) {
+        return NetworkError.NotEnrolled
+    }
     return when (status) {
         401, 403 -> NetworkError.Unauthorized
         in 400..499 -> NetworkError.Client(status, message)

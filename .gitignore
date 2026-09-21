@@ -21,5 +21,10 @@ local.properties
 !debug.keystore
 secrets.properties
 *.jks
-
 *.bak
+google-services.json
+
+.android-sdk/
+.gradle-home/
+install-debug.log
+install-release.log

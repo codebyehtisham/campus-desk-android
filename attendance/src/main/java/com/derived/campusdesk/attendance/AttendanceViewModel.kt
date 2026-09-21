@@ -12,7 +12,9 @@ import com.derived.campusdesk.networking.models.AttendanceSession
 import com.derived.campusdesk.networking.models.CampusFence
 import com.derived.campusdesk.networking.models.LocationFix
 import com.derived.campusdesk.networking.models.QRScanPayload
+import com.derived.campusdesk.networking.models.StudentAttendanceHistory
 import com.derived.campusdesk.networking.services.AttendanceService
+import com.derived.campusdesk.networking.services.StudentService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -30,6 +32,7 @@ enum class ScanPhase { Idle, Confirming, Success }
 @HiltViewModel
 class AttendanceViewModel @Inject constructor(
     private val attendanceService: AttendanceService,
+    private val studentService: StudentService,
     private val locationProvider: LocationProvider,
 ) : ViewModel() {
     private val _phase = MutableStateFlow(ScanPhase.Idle)
@@ -57,6 +60,15 @@ class AttendanceViewModel @Inject constructor(
     private val _needsLocationPermission = MutableStateFlow(false)
     val needsLocationPermission: StateFlow<Boolean> = _needsLocationPermission.asStateFlow()
 
+    private val _history = MutableStateFlow<StudentAttendanceHistory?>(null)
+    val history: StateFlow<StudentAttendanceHistory?> = _history.asStateFlow()
+
+    private val _historyLoading = MutableStateFlow(false)
+    val historyLoading: StateFlow<Boolean> = _historyLoading.asStateFlow()
+
+    private val _historyError = MutableStateFlow<String?>(null)
+    val historyError: StateFlow<String?> = _historyError.asStateFlow()
+
     private var attendanceLocationEnabled = false
     private var campusFence: CampusFence? = null
     private var lastScannedToken: String? = null
@@ -65,6 +77,20 @@ class AttendanceViewModel @Inject constructor(
     fun configure(attendanceLocationEnabled: Boolean, campusFence: CampusFence?) {
         this.attendanceLocationEnabled = attendanceLocationEnabled
         this.campusFence = campusFence
+    }
+
+    fun loadHistory() {
+        viewModelScope.launch {
+            _historyLoading.value = true
+            _historyError.value = null
+            try {
+                _history.value = studentService.attendance()
+            } catch (e: Exception) {
+                _historyError.value = e.message ?: "Could not load attendance history."
+            } finally {
+                _historyLoading.value = false
+            }
+        }
     }
 
     fun onManualCodeChange(value: String) {

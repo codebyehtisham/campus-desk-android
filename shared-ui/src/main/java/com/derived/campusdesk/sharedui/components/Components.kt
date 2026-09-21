@@ -6,7 +6,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +32,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,10 +52,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -61,12 +72,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.derived.campusdesk.sharedui.R
+import com.derived.campusdesk.sharedui.motion.CampusLiveBackdrop
 import com.derived.campusdesk.sharedui.theme.CampusRadius
 import com.derived.campusdesk.sharedui.theme.CampusSpacing
 import com.derived.campusdesk.sharedui.theme.CampusTypography
 import com.derived.campusdesk.sharedui.theme.campusColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.min
 
 fun campusHeroGradient(colors: com.derived.campusdesk.sharedui.theme.CampusColorTokens) =
     Brush.linearGradient(listOf(colors.primaryDark, colors.brandRed, colors.brandBlue))
@@ -77,16 +91,16 @@ enum class BrandButtonKind { Primary, Secondary, Ghost, Destructive }
 
 @Composable
 fun BrandMark(modifier: Modifier = Modifier, size: Int = 56) {
-    val colors = campusColors()
-    Box(
+    val radius = (size * 0.22f).dp
+    Image(
+        painter = painterResource(R.drawable.campus_desk_app_icon),
+        contentDescription = "Campus Desk",
+        contentScale = ContentScale.Crop,
         modifier = modifier
             .size(size.dp)
-            .clip(RoundedCornerShape(CampusRadius.Sm.dp))
-            .background(Brush.linearGradient(listOf(colors.primaryDark, colors.brandRed, colors.brandBlue))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Default.School, contentDescription = null, tint = colors.onBrand, modifier = Modifier.size((size * 0.5f).dp))
-    }
+            .shadow(8.dp, RoundedCornerShape(radius), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .clip(RoundedCornerShape(radius)),
+    )
 }
 
 @Composable
@@ -97,13 +111,15 @@ fun BrandButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     kind: BrandButtonKind = BrandButtonKind.Primary,
+    leadingIcon: ImageVector? = null,
+    showTrailingArrow: Boolean = kind == BrandButtonKind.Primary && leadingIcon == null,
 ) {
     val colors = campusColors()
     val bg = when (kind) {
-        BrandButtonKind.Primary -> Brush.horizontalGradient(listOf(colors.primaryDark, colors.brandRed))
+        BrandButtonKind.Primary -> Brush.horizontalGradient(listOf(colors.primaryDark, colors.brandRed, colors.brandBlue))
         BrandButtonKind.Secondary -> Brush.horizontalGradient(listOf(colors.brandBlue.copy(alpha = 0.15f), colors.brandRed.copy(alpha = 0.1f)))
         BrandButtonKind.Ghost -> Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
-        BrandButtonKind.Destructive -> Brush.horizontalGradient(listOf(Color(0xFF8B1E1E), Color(0xFFB83232)))
+        BrandButtonKind.Destructive -> Brush.horizontalGradient(listOf(colors.primaryDark, colors.brandRed))
     }
     val textColor = when (kind) {
         BrandButtonKind.Secondary, BrandButtonKind.Ghost -> colors.brandRed
@@ -123,11 +139,17 @@ fun BrandButton(
             CircularProgressIndicator(modifier = Modifier.size(22.dp), color = textColor, strokeWidth = 2.dp)
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text, color = textColor, style = MaterialTheme.typography.labelLarge)
-                if (kind == BrandButtonKind.Primary) {
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
+                when {
+                    leadingIcon != null -> {
+                        Icon(leadingIcon, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    showTrailingArrow -> {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
                 }
+                Text(text, color = textColor, style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -142,51 +164,67 @@ fun BrandTextField(
     modifier: Modifier = Modifier,
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
+    leadingIcon: ImageVector? = null,
+    placeholder: String? = null,
 ) {
     val colors = campusColors()
     val passwordVisible = remember { androidx.compose.runtime.mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        modifier = modifier
-            .fillMaxWidth()
-            .bringIntoViewRequester(bringIntoViewRequester)
-            .onFocusEvent { focusState ->
-                if (focusState.isFocused) {
-                    scope.launch {
-                        // Wait for IME animation, then scroll field above the keyboard.
-                        delay(100)
-                        bringIntoViewRequester.bringIntoView()
-                        delay(250)
-                        bringIntoViewRequester.bringIntoView()
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            label.uppercase(),
+            style = CampusTypography.Eyebrow,
+            color = colors.ink.copy(alpha = 0.78f),
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(placeholder ?: label, color = colors.muted)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .onFocusEvent { focusState ->
+                    if (focusState.isFocused) {
+                        scope.launch {
+                            delay(100)
+                            bringIntoViewRequester.bringIntoView()
+                            delay(250)
+                            bringIntoViewRequester.bringIntoView()
+                        }
                     }
+                },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = if (isPassword) KeyboardType.Password else keyboardType),
+            visualTransformation = if (isPassword && !passwordVisible.value) PasswordVisualTransformation() else VisualTransformation.None,
+            leadingIcon = leadingIcon?.let { icon ->
+                {
+                    Icon(icon, contentDescription = null, tint = colors.brandBlue, modifier = Modifier.size(20.dp))
                 }
             },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = if (isPassword) KeyboardType.Password else keyboardType),
-        visualTransformation = if (isPassword && !passwordVisible.value) PasswordVisualTransformation() else VisualTransformation.None,
-        trailingIcon = if (isPassword) {
-            {
-                IconButton(onClick = { passwordVisible.value = !passwordVisible.value }) {
-                    Icon(
-                        if (passwordVisible.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null,
-                    )
+            trailingIcon = if (isPassword) {
+                {
+                    IconButton(onClick = { passwordVisible.value = !passwordVisible.value }) {
+                        Icon(
+                            if (passwordVisible.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = colors.brandBlue,
+                        )
+                    }
                 }
-            }
-        } else null,
-        shape = RoundedCornerShape(CampusRadius.Sm.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = colors.primaryPale,
-            unfocusedContainerColor = colors.primaryPale.copy(alpha = 0.6f),
-            focusedBorderColor = colors.brandBlue,
-            unfocusedBorderColor = colors.stroke,
-        ),
-    )
+            } else null,
+            shape = RoundedCornerShape(CampusRadius.Sm.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                focusedBorderColor = colors.brandBlue,
+                unfocusedBorderColor = colors.stroke,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -261,6 +299,7 @@ fun SettingsRow(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     tint: Color = campusColors().brandBlue,
+    wrapValue: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val colors = campusColors()
@@ -289,8 +328,8 @@ fun SettingsRow(
                 value,
                 color = colors.ink,
                 style = CampusTypography.Headline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = if (wrapValue) Int.MAX_VALUE else 1,
+                overflow = if (wrapValue) TextOverflow.Clip else TextOverflow.Ellipsis,
             )
         }
         if (onClick != null) {
@@ -370,42 +409,327 @@ fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun EmptyStateView(title: String, message: String, modifier: Modifier = Modifier) {
+fun EmptyStateView(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
     val colors = campusColors()
     Column(
-        modifier = modifier.fillMaxWidth().padding(CampusSpacing.Xl.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = CampusSpacing.Xl.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(CampusSpacing.Sm.dp),
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.Md.dp),
     ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (colors.primaryPale.alpha > 0.08f) colors.primaryPale
+                        else colors.brandBlue.copy(alpha = 0.12f),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = colors.brandBlue,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+        }
         Text(title, style = CampusTypography.Title, color = colors.ink, textAlign = TextAlign.Center)
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = colors.muted, textAlign = TextAlign.Center)
+        Text(message, style = CampusTypography.Callout, color = colors.muted, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-fun CampusLoadingView(message: String = "Loading your session", modifier: Modifier = Modifier) {
+fun SegmentedControl(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = campusColors()
-    val transition = rememberInfiniteTransition(label = "loading")
+    val pill = campusPillShape()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .clip(pill)
+            .background(colors.staffSurface)
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .then(
+                        if (selected) {
+                            Modifier
+                                .shadow(
+                                    3.dp,
+                                    pill,
+                                    ambientColor = colors.ink.copy(alpha = 0.1f),
+                                    spotColor = colors.ink.copy(alpha = 0.1f),
+                                    clip = false,
+                                )
+                                .background(colors.surface, pill)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { onSelect(index) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option,
+                    style = CampusTypography.Caption,
+                    color = if (selected) colors.ink else colors.muted,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickStatCard(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    val colors = campusColors()
+    CampusCard(modifier = modifier, onClick = onClick) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(tint.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
+            }
+            Text(
+                value,
+                style = CampusTypography.Title.copy(fontSize = 24.sp),
+                color = colors.ink,
+            )
+            Text(title, style = CampusTypography.Caption, color = colors.muted)
+        }
+    }
+}
+
+@Composable
+fun StatusPill(status: String, modifier: Modifier = Modifier) {
+    val colors = campusColors()
+    val normalized = status.trim().lowercase()
+    val (display, tint) = when (normalized) {
+        "approved", "accepted" -> "Approved" to colors.brandBlue
+        "graded" -> "Graded" to colors.brandBlue
+        "submitted" -> "Submitted" to colors.brandBlue.copy(alpha = 0.85f)
+        "present" -> "Present" to colors.brandBlue
+        "rejected", "declined" -> "Rejected" to colors.brandRed
+        "absent" -> "Absent" to colors.brandRed
+        "pending" -> "Pending" to colors.muted
+        "missing" -> "Missing" to colors.muted
+        else -> (status.ifBlank { "Missing" }.replaceFirstChar { it.uppercase() }) to colors.muted
+    }
+    Text(
+        text = display.uppercase(),
+        modifier = modifier
+            .clip(campusPillShape())
+            .background(tint.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = tint,
+        style = CampusTypography.Caption.copy(
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+        ),
+    )
+}
+
+@Composable
+fun ScreenBackground(modifier: Modifier = Modifier) {
+    CampusLiveBackdrop(modifier = modifier)
+}
+
+enum class DerivedLoaderStyle { Splash, Inline, Overlay }
+
+@Composable
+fun CampusLoadingView(
+    message: String = "DERIVING",
+    modifier: Modifier = Modifier,
+    style: DerivedLoaderStyle = DerivedLoaderStyle.Inline,
+) {
+    val colors = campusColors()
+    val splash = style == DerivedLoaderStyle.Splash || style == DerivedLoaderStyle.Overlay
+    val outer = if (splash) 118.dp else 72.dp
+    val inner = if (splash) 78.dp else 48.dp
+    val dot = if (splash) 10.dp else 7.dp
+    val ringWidthPxTarget = if (splash) 1.4f else 1.1f
+    val labelSize = if (splash) 22.sp else 16.sp
+    val iconSize = if (splash) 20.dp else 14.dp
+    val tracking = if (splash) 6.sp else 4.sp
+
+    val transition = rememberInfiniteTransition(label = "deriving")
     val rotation by transition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing)),
-        label = "rotation",
+        animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing)),
+        label = "spin",
     )
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(CampusSpacing.Lg.dp),
+    val pulse by transition.animateFloat(
+        initialValue = 0.97f,
+        targetValue = 1.03f,
+        animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val dotPulse by transition.animateFloat(
+        initialValue = 0.88f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse),
+        label = "dot",
+    )
+
+    Box(
+        modifier = modifier.then(
+            when (style) {
+                DerivedLoaderStyle.Splash -> Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                colors.primaryDark.copy(alpha = 0.92f),
+                                colors.brandRed.copy(alpha = 0.78f),
+                                colors.brandBlue.copy(alpha = 0.65f),
+                            ),
+                        ),
+                    )
+                DerivedLoaderStyle.Overlay -> Modifier
+                    .fillMaxSize()
+                    .background(colors.canvas.copy(alpha = 0.88f))
+                DerivedLoaderStyle.Inline -> Modifier.fillMaxWidth()
+            },
+        ),
+        contentAlignment = Alignment.Center,
     ) {
-        BrandMark(size = 72)
-        Box(modifier = Modifier.size(96.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(96.dp).graphicsLayer { rotationZ = rotation },
-                color = colors.brandBlue.copy(alpha = 0.35f),
-                strokeWidth = 2.dp,
+        if (style == DerivedLoaderStyle.Splash) {
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier.fillMaxSize(),
+                onDraw = {
+                    val step = 28f * density
+                    val line = colors.brandBlue.copy(alpha = 0.1f)
+                    val canvasW = size.width
+                    val canvasH = size.height
+                    var x = 0f
+                    while (x <= canvasW) {
+                        drawLine(line, Offset(x, 0f), Offset(x, canvasH), strokeWidth = 1f)
+                        x += step
+                    }
+                    var y = 0f
+                    while (y <= canvasH) {
+                        drawLine(line, Offset(0f, y), Offset(canvasW, y), strokeWidth = 1f)
+                        y += step
+                    }
+                },
             )
         }
-        Text(message, color = colors.muted, style = MaterialTheme.typography.bodyLarge)
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (splash) 28.dp else 18.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(outer)) {
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier
+                        .size(outer)
+                        .graphicsLayer { scaleX = pulse; scaleY = pulse },
+                    onDraw = {
+                        drawCircle(
+                            color = colors.brandBlue.copy(alpha = 0.28f),
+                            style = Stroke(width = ringWidthPxTarget * density),
+                        )
+                    },
+                )
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier
+                        .size(inner)
+                        .graphicsLayer { rotationZ = rotation },
+                    onDraw = {
+                        val dash = 5f * density
+                        val gap = 7f * density
+                        drawCircle(
+                            color = colors.brandRed,
+                            style = Stroke(
+                                width = ringWidthPxTarget * density,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, gap)),
+                                cap = StrokeCap.Round,
+                            ),
+                        )
+                    },
+                )
+                Box(
+                    modifier = Modifier
+                        .size(dot)
+                        .graphicsLayer { scaleX = dotPulse; scaleY = dotPulse }
+                        .clip(CircleShape)
+                        .background(colors.brandRed),
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier.size(iconSize),
+                    onDraw = {
+                        val strokeW = size.minDimension * 0.12f
+                        val stroke = Stroke(width = strokeW, cap = StrokeCap.Round)
+                        drawCircle(
+                            color = colors.brandRed,
+                            radius = size.minDimension / 2f - strokeW,
+                            style = stroke,
+                        )
+                        drawLine(
+                            color = colors.brandRed,
+                            start = Offset(size.width * 0.22f, size.height * 0.78f),
+                            end = Offset(size.width * 0.78f, size.height * 0.22f),
+                            strokeWidth = strokeW,
+                            cap = StrokeCap.Round,
+                        )
+                    },
+                )
+                Text(
+                    message.ifBlank { "DERIVING" }.uppercase(),
+                    color = colors.brandRed,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = labelSize,
+                        letterSpacing = tracking,
+                    ),
+                )
+            }
+        }
     }
 }
 
@@ -418,11 +742,12 @@ fun AsyncStateView(
     emptyMessage: String,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    emptyIcon: ImageVector? = null,
     content: @Composable () -> Unit,
 ) {
     when {
         isLoading && isEmpty -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CampusLoadingView(message = "Loading…", modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+            CampusLoadingView(message = "DERIVING", modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
         }
         errorMessage != null && isEmpty -> Column(
             modifier = modifier.fillMaxWidth().padding(CampusSpacing.Lg.dp),
@@ -432,7 +757,7 @@ fun AsyncStateView(
             ErrorBanner(errorMessage)
             onRetry?.let { BrandButton(text = "Try again", onClick = it, modifier = Modifier.width(180.dp)) }
         }
-        isEmpty -> EmptyStateView(emptyTitle, emptyMessage, modifier)
+        isEmpty -> EmptyStateView(emptyTitle, emptyMessage, modifier, icon = emptyIcon)
         else -> content()
     }
 }

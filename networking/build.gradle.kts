@@ -30,5 +30,6 @@ dependencies {
     implementation(libs.okhttp.dnsoverhttps)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.security.crypto)
+    implementation(project(":archer-sdk"))
     testImplementation(libs.junit)
 }

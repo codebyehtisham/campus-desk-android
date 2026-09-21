@@ -7,6 +7,11 @@ plugins {
     id("kotlin-kapt")
 }
 
+val googleServicesFile = file("google-services.json")
+if (googleServicesFile.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.derived.campusdesk"
     compileSdk = 35
@@ -18,6 +23,17 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Archer Console apiKey for package com.derived.campusdesk
+        buildConfigField(
+            "String",
+            "ARCHER_API_KEY",
+            "\"arch_live_t2ulr-iuWkcn0F8t2a6YlpWWDB-AbVWgVlgX_hZ3P10\"",
+        )
+    }
+
+    signingConfigs {
+        // Local device installs of release use the debug keystore.
+        getByName("debug")
     }
 
     buildTypes {
@@ -27,9 +43,12 @@ android {
             buildConfigField("String", "APP_ENV", "\"development\"")
             buildConfigField("boolean", "DEV_TOOLS", "true")
             buildConfigField("String", "INSTITUTE_SLUG", "\"explore\"")
+            buildConfigField("String", "ARCHER_ENVIRONMENT", "\"development\"")
         }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -38,6 +57,7 @@ android {
             buildConfigField("String", "APP_ENV", "\"production\"")
             buildConfigField("boolean", "DEV_TOOLS", "false")
             buildConfigField("String", "INSTITUTE_SLUG", "\"explore\"")
+            buildConfigField("String", "ARCHER_ENVIRONMENT", "\"production\"")
         }
     }
 
@@ -63,6 +83,7 @@ dependencies {
     implementation(project(":courses"))
     implementation(project(":attendance"))
     implementation(project(":profile"))
+    implementation(project(":archer-sdk"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.material)
@@ -81,6 +102,11 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+
+    // Archer push (FCM). Drop app/google-services.json from the Firebase project
+    // configured in Archer Console → Push to enable token registration.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

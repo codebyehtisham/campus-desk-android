@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.derived.campusdesk.analytics.ArcherPushBootstrap
 import com.derived.campusdesk.networking.api.ApiEnvironmentStore
 import com.derived.campusdesk.networking.debug.DevToolsConfig
 import com.derived.campusdesk.auth.SessionStore
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        ArcherPushBootstrap.activate(this)
         setContent {
             CampusDeskTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
