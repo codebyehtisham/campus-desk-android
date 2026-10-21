@@ -28,3 +28,4 @@ google-services.json
 .gradle-home/
 install-debug.log
 install-release.log
+keystore.properties

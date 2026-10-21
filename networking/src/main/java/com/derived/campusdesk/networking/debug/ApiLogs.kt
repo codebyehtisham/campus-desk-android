@@ -17,7 +17,7 @@ object NetworkResponseStore {
 
     fun add(log: ApiResponseLog) = synchronized(lock) {
         logs.add(0, log)
-        while (logs.size > MAX_LOGS) logs.removeLast()
+        while (logs.size > MAX_LOGS) logs.removeAt(logs.lastIndex)
     }
 
     fun all(): List<ApiResponseLog> = synchronized(lock) { logs.toList() }

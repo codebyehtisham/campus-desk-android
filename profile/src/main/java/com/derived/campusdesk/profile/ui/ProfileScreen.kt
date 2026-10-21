@@ -353,7 +353,7 @@ fun ProfileScreen(
                         }
                         SettingsDivider()
                         LegalRow(Icons.Default.Policy, "Privacy Policy", showsChevron = true) {
-                            openUrl(context, "https://derivedstudio.com/privacy")
+                            openUrl(context, "https://derivedstudio.com/privacy/campus-desk")
                         }
                         SettingsDivider()
                         LegalRow(Icons.Default.Description, "Terms", showsChevron = true) {
@@ -365,7 +365,7 @@ fun ProfileScreen(
                         }
                         SettingsDivider()
                         LegalRow(Icons.Default.Email, "Contact support", showsChevron = false) {
-                            openUrl(context, "mailto:support@derivedstudio.com")
+                            openUrl(context, "mailto:contact@derivedstudio.com")
                         }
                     }
                 }
